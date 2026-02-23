@@ -1,0 +1,17 @@
+{
+  "name": "p2verifics",
+  "version": "1.0.0",
+  "description": "A Privacy-Preserving Verifiable Credential System using BBS signatures",
+  "type": "module",
+  "scripts": {
+    "issue": "node issuer.js",
+    "hold": "node holder.js",
+    "verify": "node verifier.js"
+  },
+  "dependencies": {
+    "@digitalbazaar/bbs-signatures": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

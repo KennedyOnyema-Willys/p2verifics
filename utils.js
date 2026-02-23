@@ -1,6 +1,6 @@
 import * as bbs from '@digitalbazaar/bbs-signatures';
 
-export const enc = new TextEncoder();
+const enc = new TextEncoder();
 export const utf8 = (s) => enc.encode(s);
 export const hex = (u8) => Buffer.from(u8).toString('hex');
 export const fromHex = (h) => new Uint8Array(Buffer.from(h, 'hex'));
