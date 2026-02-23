@@ -19,7 +19,7 @@ function buildKeyIndexMap(credential) {
   return map;
 }
 
-async function main() {
+export async function createPresentationInteractive(rlArg) {
   if (!fs.existsSync('request.json')) usageAndExit('Missing request.json. Verifier must create a request first.');
   if (!fs.existsSync('holder_store/credential.json')) usageAndExit('Missing holder_store/credential.json. Issuer must issue first.');
 
@@ -29,32 +29,28 @@ async function main() {
   const policy = REQUEST_POLICIES[request.code];
   if (!policy) usageAndExit(`Unknown request code in request.json: ${request.code}`);
 
-  // Human-readable prompt
   console.log('\n--- Holder Consent ---');
   console.log(`${request.orgName} is requesting to ${policy.description}.`);
   console.log(`Request code: ${request.code}`);
   console.log('Data that would be shared:');
   for (const k of policy.discloseKeys) console.log(`  - ${k}`);
 
-  const rl = readline.createInterface({ input, output });
+  const rl = rlArg ?? readline.createInterface({ input, output });
   const ans = (await rl.question('\nDo you agree to share? (y/n): ')).trim().toLowerCase();
-  rl.close();
+  if (!rlArg) rl.close();
 
   if (ans !== 'y' && ans !== 'yes') {
     console.log('Holder: declined. No presentation created.');
-    // Clean up any old presentation to avoid accidental verification
     if (fs.existsSync('presentation.json')) fs.unlinkSync('presentation.json');
-    return;
+    return null;
   }
 
-  // Map discloseKeys -> message indexes
   const keyIndex = buildKeyIndexMap(credential);
   const disclosedMessageIndexes = policy.discloseKeys.map(k => {
     if (keyIndex[k] === undefined) throw new Error(`Credential missing attribute key: ${k}`);
     return keyIndex[k];
-  });
+  }).sort((a, b) => a - b);
 
-  // presentationHeader binds verifier request (nonce) into the proof (anti-replay)
   const presentationHeader = utf8(`nonce=${request.nonceHex}|org=${request.orgName}|code=${request.code}`);
 
   const proof = await bbs.deriveProof({
@@ -77,8 +73,6 @@ async function main() {
     disclosedMessages,
     presentationHeader: hex(presentationHeader),
     proof: hex(proof),
-
-    // Optional: include request metadata for debugging/demo
     request: {
       orgName: request.orgName,
       code: request.code,
@@ -91,9 +85,18 @@ async function main() {
   fs.writeFileSync('presentation.json', JSON.stringify(presentation, null, 2), 'utf8');
   console.log('\nHolder: shared presentation.json');
   console.log('Next: verifier should run verification.');
+
+  return presentation;
 }
 
-main().catch(e => {
-  console.error(e);
-  process.exit(1);
-});
+// Keep CLI support
+async function main() {
+  await createPresentationInteractive();
+}
+
+if (import.meta.url === new URL(process.argv[1], 'file:').href) {
+  main().catch(e => {
+    console.error(e);
+    process.exit(1);
+  });
+}
