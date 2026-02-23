@@ -1,3 +1,14 @@
+# Ignore this stupid file that MacOS creates in every folder
 .DS_Store
-node_modules
-*.json
+
+# Dependency folders
+node_modules/
+
+# Environment variables files
+.env
+
+# Do not commit !!!!
+credential.json
+presentation.json
+request.json
+verification_result.json
