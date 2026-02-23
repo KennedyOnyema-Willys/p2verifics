@@ -1,0 +1,17 @@
+{
+  "name": "p2verifics",
+  "version": "1.0.0",
+  "description": "A Privacy-Preserving Verifiable Credential System",
+  "type": "module",
+  "main": "issuer.js",
+  "scripts": {
+    "issue": "node issuer.js",
+    "request": "node verifier.js request 1A \"E-Corp\"",
+    "hold": "node holder.js",
+    "verify": "node verifier.js verify \"E-Corp\""
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@digitalbazaar/bbs-signatures": "^3.0.0"
+  }
+}

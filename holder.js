@@ -1,15 +1,61 @@
 import fs from 'fs';
-import crypto from 'crypto';
-import { bbs, fromHex, hex } from './utils.js';
+import readline from 'readline/promises';
+import { stdin as input, stdout as output } from 'process';
+
+import {
+  bbs, fromHex, hex, utf8,
+  REQUEST_POLICIES
+} from './utils.js';
+
+function usageAndExit(msg) {
+  if (msg) console.error(msg);
+  console.error('Need request.json and holder_store/credential.json');
+  process.exit(1);
+}
+
+function buildKeyIndexMap(credential) {
+  const map = {};
+  for (const a of credential.attributes) map[a.key] = a.index;
+  return map;
+}
 
 async function main() {
-  const credential = JSON.parse(fs.readFileSync('credential.json', 'utf8'));
+  if (!fs.existsSync('request.json')) usageAndExit('Missing request.json. Verifier must create a request first.');
+  if (!fs.existsSync('holder_store/credential.json')) usageAndExit('Missing holder_store/credential.json. Issuer must issue first.');
 
-  // Verifier should send a nonce; for demo we generate it here.
-  // In a real flow: verifier -> holder sends nonce; holder uses that nonce below.
-  const presentationHeader = crypto.randomBytes(16);
+  const request = JSON.parse(fs.readFileSync('request.json', 'utf8'));
+  const credential = JSON.parse(fs.readFileSync('holder_store/credential.json', 'utf8'));
 
-  const disclosedMessageIndexes = [0, 2]; // reveal subject + age_over_18
+  const policy = REQUEST_POLICIES[request.code];
+  if (!policy) usageAndExit(`Unknown request code in request.json: ${request.code}`);
+
+  // Human-readable prompt
+  console.log('\n--- Holder Consent ---');
+  console.log(`${request.orgName} is requesting to ${policy.description}.`);
+  console.log(`Request code: ${request.code}`);
+  console.log('Data that would be shared:');
+  for (const k of policy.discloseKeys) console.log(`  - ${k}`);
+
+  const rl = readline.createInterface({ input, output });
+  const ans = (await rl.question('\nDo you agree to share? (y/n): ')).trim().toLowerCase();
+  rl.close();
+
+  if (ans !== 'y' && ans !== 'yes') {
+    console.log('Holder: declined. No presentation created.');
+    // Clean up any old presentation to avoid accidental verification
+    if (fs.existsSync('presentation.json')) fs.unlinkSync('presentation.json');
+    return;
+  }
+
+  // Map discloseKeys -> message indexes
+  const keyIndex = buildKeyIndexMap(credential);
+  const disclosedMessageIndexes = policy.discloseKeys.map(k => {
+    if (keyIndex[k] === undefined) throw new Error(`Credential missing attribute key: ${k}`);
+    return keyIndex[k];
+  });
+
+  // presentationHeader binds verifier request (nonce) into the proof (anti-replay)
+  const presentationHeader = utf8(`nonce=${request.nonceHex}|org=${request.orgName}|code=${request.code}`);
 
   const proof = await bbs.deriveProof({
     publicKey: fromHex(credential.issuerPublicKey),
@@ -30,11 +76,21 @@ async function main() {
     disclosedMessageIndexes,
     disclosedMessages,
     presentationHeader: hex(presentationHeader),
-    proof: hex(proof)
+    proof: hex(proof),
+
+    // Optional: include request metadata for debugging/demo
+    request: {
+      orgName: request.orgName,
+      code: request.code,
+      description: request.description,
+      nonceHex: request.nonceHex,
+      requestedAt: request.requestedAt
+    }
   };
 
   fs.writeFileSync('presentation.json', JSON.stringify(presentation, null, 2), 'utf8');
-  console.log('Holder: wrote presentation.json');
+  console.log('\nHolder: shared presentation.json');
+  console.log('Next: verifier should run verification.');
 }
 
 main().catch(e => {
