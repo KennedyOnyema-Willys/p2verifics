@@ -1,2 +1,3 @@
 # p2verifics
-A Privacy-Preserving Verifiable Credential System
+A proof of concept Privacy-Preserving Verifiable Credential System
+
